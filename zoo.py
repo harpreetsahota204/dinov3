@@ -1,3 +1,4 @@
+import os
 import logging
 import math
 import warnings
@@ -10,6 +11,8 @@ from scipy.ndimage import gaussian_filter
 from skimage.transform import resize
 from sklearn.decomposition import PCA
 from torchvision.transforms.functional import pil_to_tensor
+
+from transformers import AutoImageProcessor, AutoModel
 
 import fiftyone.core.labels as fol
 import fiftyone.core.models as fom
@@ -26,8 +29,7 @@ class DINOV3ModelConfig(fout.TorchImageModelConfig):
     Args:
         model_name: the DINOV3 model name to load from Hugging Face (default: "facebook/dinov3-vits16-pretrain-lvd1689m")
         model_path: optional path to the saved model file on disk
-        output_type: what to return - "cls", "register", "patch", or "all"
-        return_attention_maps: whether to return attention maps
+        output_type: what to return - "cls", "attention_map", or "patch"
         use_mixed_precision: whether to use mixed precision for inference
     """
 
@@ -37,10 +39,8 @@ class DINOV3ModelConfig(fout.TorchImageModelConfig):
         self.model_name = self.parse_string(d, "model_name", default="facebook/dinov3-vits16-pretrain-lvd1689m")
         self.model_path = self.parse_string(d, "model_path")
         self.output_type = self.parse_string(d, "output_type", default="cls")
-        self.return_attention_maps = self.parse_bool(d, "return_attention_maps", default=False)
-        self.use_external_preprocessor = self.parse_bool(d, "use_external_preprocessor", default=False)
-        self.use_mixed_precision = self.parse_bool(d, "use_mixed_precision", default=True)
         self.apply_smoothing = self.parse_bool(d, "apply_smoothing", default=True)
+        self.aggregration = self.parse_bool(d, "aggregration", default=True)
         self.smoothing_sigma = self.parse_number(d, "smoothing_sigma", default=1.51)
 
 class DINOV3Model(fout.TorchImageModel):
@@ -55,10 +55,6 @@ class DINOV3Model(fout.TorchImageModel):
         
         # Load the DINOV3 model and setup preprocessor
         self._dinov3_model = self._load_dinov3_model()
-        if config.use_external_preprocessor:
-            self._conditioner = self._dinov3_model.make_preprocessor_external()
-        else:
-            self._conditioner = None
             
     def _check_mixed_precision_support(self):
         """Check if the current GPU supports mixed precision with bfloat16."""
@@ -78,20 +74,11 @@ class DINOV3Model(fout.TorchImageModel):
 
     def _load_model(self, config):
         """Load the DINOV3 model from Hugging Face or disk."""
-        from transformers import AutoImageProcessor, AutoModel
-        import os
-        
-        # Load from local path if provided
-        if config.model_path and os.path.exists(config.model_path):
-            logger.info(f"Loading DINOV3 model from local path: {config.model_path}")
-            model = AutoModel.from_pretrained(config.model_path)
-            self._processor = AutoImageProcessor.from_pretrained(config.model_path)
-        else:
-            # Load from Hugging Face hub
-            logger.info(f"Loading DINOV3 model from Hugging Face: {config.model_name}")
-            model = AutoModel.from_pretrained(config.model_name)
-            self._processor = AutoImageProcessor.from_pretrained(config.model_name)
-        
+
+        logger.info(f"Loading DINOV3 model from local path: {config.model_path}")
+        model = AutoModel.from_pretrained(config.model_path)
+        self._processor = AutoImageProcessor.from_pretrained(config.model_path)
+
         # Store model info
         self._patch_size = model.config.patch_size
         self._hidden_size = model.config.hidden_size
@@ -256,17 +243,10 @@ class DINOV3Model(fout.TorchImageModel):
         # Return based on output type
         if self.config.output_type == "cls":
             output = batch_cls.squeeze(1)  # Remove the extra dimension for CLS token
-        elif self.config.output_type == "register":
+        elif self.config.output_type == "attention_map":
             output = batch_register
         elif self.config.output_type == "patch":
             output = batch_patch
-        elif self.config.output_type == "all":
-            # Return a dictionary with all token types
-            return {
-                "cls": [t.squeeze(1).detach().cpu().numpy() for t in cls_tokens],
-                "register": [t.detach().cpu().numpy() for t in register_tokens],
-                "patch": [t.detach().cpu().numpy() for t in patch_tokens]
-            }
         else:
             raise ValueError(f"Unknown output_type: {self.config.output_type}")
         
@@ -330,19 +310,19 @@ class DINOV3OutputProcessor(fout.OutputProcessor):
         Returns:
             list of numpy arrays containing embeddings
         """
-        if isinstance(output, dict):
-            # Handle dictionary output with all embedding types
-            return output
-            
         batch_size = output.shape[0]
         return [output[i].detach().cpu().numpy() for i in range(batch_size)]
 
-class DINOV3HeatmapOutputProcessor(fout.OutputProcessor):
+
+
+class DINOV3PatchOutputProcessor(fout.OutputProcessor):
     """Spatial heatmap processor for DINOV3 patch embeddings.
     
     This processor visualizes DINOV3 patch embeddings as colorful attention heatmaps using PCA,
     similar to the official Meta DINOV3 visualization techniques. The visualizations help
     understand what parts of the image the model is focusing on and different semantic regions.
+    
+    Expected input: Patch tokens of shape [batch_size, 196, 384] for 14x14 spatial grid
     """
 
     def __init__(self, apply_smoothing=True, smoothing_sigma=1.0, pca_components=3, 
@@ -357,7 +337,7 @@ class DINOV3HeatmapOutputProcessor(fout.OutputProcessor):
     def __call__(self, output, frame_sizes, confidence_thresh=None):
         """
         Args:
-            output: torch.Tensor of shape [B, num_patches, hidden_dim] or [B, H, W, hidden_dim]
+            output: torch.Tensor of shape [B, num_patches, hidden_dim] where num_patches=196
             frame_sizes: list of (width, height) for each image
             confidence_thresh: used as foreground threshold if provided
 
@@ -374,10 +354,12 @@ class DINOV3HeatmapOutputProcessor(fout.OutputProcessor):
             # Get patch tokens for this image
             patch_embedding = output[i].detach().cpu().numpy()
             
-            # Handle different input formats
+            # Validate we have patch tokens (196 for 14x14 grid)
             if len(patch_embedding.shape) == 2:  # [num_patches, hidden_dim]
                 num_patches, hidden_dim = patch_embedding.shape
-                h = w = int(math.sqrt(num_patches))  # Assume square grid
+                if num_patches != 196:
+                    warnings.warn(f"Expected 196 patches, got {num_patches}. This may not be patch tokens.")
+                h = w = int(np.sqrt(num_patches))  # Should be 14x14
                 patch_embedding = patch_embedding.reshape(h, w, hidden_dim)
             elif len(patch_embedding.shape) == 3:  # [h, w, hidden_dim]
                 h, w, hidden_dim = patch_embedding.shape
@@ -509,4 +491,196 @@ class DINOV3HeatmapOutputProcessor(fout.OutputProcessor):
                 
             heatmaps.append(heatmap)
 
+        return heatmaps
+
+
+class DINOV3RegisterOutputProcessor(fout.OutputProcessor):
+    """Visualization processor for DINOV3 register tokens.
+    
+    Register tokens are global memory slots that capture different aspects of the image.
+    This processor creates visualizations by computing similarity between register tokens
+    and patch tokens, showing which image regions each register token focuses on.
+    
+    Expected input: Register tokens of shape [batch_size, 4, 384] 
+    Requires access to patch tokens for similarity computation.
+    """
+
+    def __init__(self, patch_tokens=None, aggregation='mean', apply_smoothing=True, 
+                 smoothing_sigma=1.5, temperature=0.1, **kwargs):
+        """
+        Args:
+            patch_tokens: Optional pre-computed patch tokens for similarity computation
+            aggregation: How to combine multiple register tokens - 'mean', 'max', or 'separate'
+            apply_smoothing: Whether to apply Gaussian smoothing
+            smoothing_sigma: Sigma for Gaussian smoothing
+            temperature: Temperature for softmax scaling of similarities
+        """
+        super().__init__(**kwargs)
+        self.patch_tokens = patch_tokens
+        self.aggregation = aggregation
+        self.apply_smoothing = apply_smoothing
+        self.smoothing_sigma = smoothing_sigma
+        self.temperature = temperature
+
+    def set_patch_tokens(self, patch_tokens):
+        """Set patch tokens for similarity computation.
+        
+        Args:
+            patch_tokens: torch.Tensor of shape [batch_size, 196, 384]
+        """
+        self.patch_tokens = patch_tokens
+
+    def __call__(self, output, frame_sizes, confidence_thresh=None, patch_tokens=None):
+        """
+        Args:
+            output: torch.Tensor of shape [B, 4, hidden_dim] (register tokens)
+            frame_sizes: list of (width, height) for each image
+            confidence_thresh: not used for register tokens
+            patch_tokens: Optional torch.Tensor of shape [B, 196, hidden_dim] for similarity computation
+
+        Returns:
+            List of fol.Heatmap instances
+        """
+        # Use provided patch_tokens if available, otherwise fall back to stored ones
+        patch_tokens_to_use = patch_tokens if patch_tokens is not None else self.patch_tokens
+        
+        if patch_tokens_to_use is None:
+            # If no patch tokens provided, create a simple visualization based on register token norms
+            return self._create_norm_based_visualization(output, frame_sizes)
+        
+        batch_size = output.shape[0]
+        heatmaps = []
+        
+        for i in range(batch_size):
+            # Get register tokens for this image [4, hidden_dim]
+            register_tokens = output[i].detach().cpu().numpy()
+            
+            # Validate shape
+            if register_tokens.shape[0] != 4:
+                warnings.warn(f"Expected 4 register tokens, got {register_tokens.shape[0]}")
+            
+            # Get corresponding patch tokens [196, hidden_dim]
+            if isinstance(patch_tokens_to_use, torch.Tensor):
+                patch_tokens = patch_tokens_to_use[i].detach().cpu().numpy()
+            else:
+                patch_tokens = patch_tokens_to_use[i]
+            
+            # Reshape patch tokens if needed
+            if len(patch_tokens.shape) == 3:  # [h, w, hidden_dim]
+                h, w, hidden_dim = patch_tokens.shape
+                patch_tokens = patch_tokens.reshape(-1, hidden_dim)
+            else:
+                num_patches = patch_tokens.shape[0]
+                h = w = int(np.sqrt(num_patches))
+            
+            # Compute similarity between register tokens and patch tokens
+            # Normalize vectors for cosine similarity
+            register_norm = register_tokens / (np.linalg.norm(register_tokens, axis=1, keepdims=True) + 1e-8)
+            patch_norm = patch_tokens / (np.linalg.norm(patch_tokens, axis=1, keepdims=True) + 1e-8)
+            
+            # Compute similarities [4, 196]
+            similarities = register_norm @ patch_norm.T
+            
+            # Apply temperature scaling and softmax for sharper focus
+            similarities = similarities / self.temperature
+            similarities = np.exp(similarities - np.max(similarities, axis=1, keepdims=True))
+            similarities = similarities / np.sum(similarities, axis=1, keepdims=True)
+            
+            # Reshape to spatial grid [4, 14, 14]
+            similarity_maps = similarities.reshape(4, h, w)
+            
+            # Aggregate multiple register tokens based on strategy
+            if self.aggregation == 'mean':
+                # Average across all register tokens
+                attention_map = np.mean(similarity_maps, axis=0)
+            elif self.aggregation == 'max':
+                # Take maximum activation across register tokens
+                attention_map = np.max(similarity_maps, axis=0)
+            elif self.aggregation == 'separate':
+                # Create 4 separate channels (will handle differently)
+                # For now, just use the first register token
+                attention_map = similarity_maps[0]
+                # TODO: Could return multiple heatmaps or combine into RGB channels
+            else:
+                attention_map = np.mean(similarity_maps, axis=0)
+            
+            # Optional smoothing
+            if self.apply_smoothing:
+                attention_map = gaussian_filter(attention_map, sigma=self.smoothing_sigma)
+            
+            # Resize to match original image dimensions
+            orig_w, orig_h = frame_sizes[i]
+            attention_resized = resize(
+                attention_map,
+                (orig_h, orig_w),
+                preserve_range=True,
+                anti_aliasing=True
+            )
+            
+            # Normalize to uint8 [0, 255]
+            att_min, att_max = attention_resized.min(), attention_resized.max()
+            if att_max > att_min:
+                attention_uint8 = ((attention_resized - att_min) / (att_max - att_min) * 255).astype(np.uint8)
+            else:
+                attention_uint8 = np.zeros_like(attention_resized, dtype=np.uint8)
+            
+            # Create heatmap
+            heatmap = fol.Heatmap(
+                map=attention_uint8,
+                range=[0, 255]
+            )
+            
+            heatmaps.append(heatmap)
+        
+        return heatmaps
+    
+    def _create_norm_based_visualization(self, output, frame_sizes):
+        """Fallback visualization using register token norms when patch tokens aren't available.
+        
+        Creates a simple uniform heatmap weighted by register token magnitudes.
+        """
+        batch_size = output.shape[0]
+        heatmaps = []
+        
+        for i in range(batch_size):
+            register_tokens = output[i].detach().cpu().numpy()
+            
+            # Compute L2 norms of register tokens
+            register_norms = np.linalg.norm(register_tokens, axis=1)  # [4]
+            
+            # Normalize to [0, 1]
+            if register_norms.max() > register_norms.min():
+                register_norms = (register_norms - register_norms.min()) / (register_norms.max() - register_norms.min())
+            
+            # Create a simple 2x2 grid visualization of register token strengths
+            norm_grid = register_norms.reshape(2, 2)
+            
+            # Resize to match original image dimensions
+            orig_w, orig_h = frame_sizes[i]
+            norm_resized = resize(
+                norm_grid,
+                (orig_h, orig_w),
+                preserve_range=True,
+                anti_aliasing=True,
+                order=3  # Cubic interpolation for smoother result
+            )
+            
+            # Apply smoothing for better visualization
+            if self.apply_smoothing:
+                norm_resized = gaussian_filter(norm_resized, sigma=self.smoothing_sigma * 10)  # More smoothing for 2x2 grid
+            
+            # Convert to uint8
+            norm_uint8 = (norm_resized * 255).astype(np.uint8)
+            
+            heatmap = fol.Heatmap(
+                map=norm_uint8,
+                range=[0, 255]
+            )
+            
+            heatmaps.append(heatmap)
+        
+        warnings.warn("No patch tokens provided for register token visualization. "
+                     "Using simple norm-based visualization. For better results, "
+                     "provide patch tokens using set_patch_tokens() method.")
+        
         return heatmaps

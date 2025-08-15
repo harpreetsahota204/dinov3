@@ -6,7 +6,7 @@ from huggingface_hub import snapshot_download
 
 from fiftyone.operators import types
 
-from .zoo import DINOV3ModelConfig, DINOV3Model, DINOV3OutputProcessor, DINOV3HeatmapOutputProcessor
+from .zoo import DINOV3ModelConfig, DINOV3Model, DINOV3OutputProcessor, DINOV3PatchOutputProcessor, DINOV3RegisterOutputProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -120,18 +120,22 @@ def load_model(
         # CLS token - global image representation (position 0)
         default_params["as_feature_extractor"] = True
         default_params["output_processor_cls"] = DINOV3OutputProcessor
-        default_params["output_processor_args"] = {"output_type": "cls"}
+        default_params["output_processor_args"] = {"output_type": output_type}
         
     elif output_type == "attention_map":
         # Register tokens - memory slots (positions 1 to 1+num_register_tokens)
         default_params["as_feature_extractor"] = True
-        default_params["output_processor_cls"] = DINOV3HeatmapOutputProcessor
-        default_params["output_processor_args"] = {"output_type": "attention_map"}
+        default_params["output_processor_cls"] = DINOV3RegisterOutputProcessor
+        default_params["output_processor_args"] = {
+            "apply_smoothing": kwargs.get("apply_smoothing", True),
+            "smoothing_sigma": kwargs.get("smoothing_sigma", 1.51),
+             "aggregation":'mean',
+        }
         
     elif output_type == "patch":
         # Patch tokens - local embeddings for each 16x16 patch (remaining positions)
         default_params["as_feature_extractor"] = True
-        default_params["output_processor_cls"] = DINOV3HeatmapOutputProcessor
+        default_params["output_processor_cls"] = DINOV3PatchOutputProcessor
         default_params["output_processor_args"] = {
             "apply_smoothing": kwargs.get("apply_smoothing", True),
             "smoothing_sigma": kwargs.get("smoothing_sigma", 1.51),
@@ -170,39 +174,4 @@ def parse_parameters(model_name, ctx, params):
         params: a params dict
     """
     pass
-
-
-def extract_dinov3_features(model, inputs):
-    """Extract DINOv3 features from the model, splitting them into different token types.
-    
-    Args:
-        model: A loaded DINOv3 model from AutoModel.from_pretrained()
-        inputs: Processed inputs from the DINOv3 processor
-        
-    Returns:
-        cls_token: Global image representation (CLS token)
-        register_tokens: Global memory slots
-        patch_features: Local patch embeddings reshaped to 2D grid
-    """
-    # Extract image dimensions and calculate number of patches
-    patch_size = model.config.patch_size
-    batch_size, _, img_height, img_width = inputs.pixel_values.shape
-    num_patches_height, num_patches_width = img_height // patch_size, img_width // patch_size
-    
-    # Get model outputs
-    with torch.inference_mode():
-        outputs = model(**inputs)
-    
-    # Get last hidden states
-    last_hidden_states = outputs.last_hidden_state
-    
-    # Extract different token types
-    cls_token = last_hidden_states[:, 0, :]  # CLS token at position 0
-    register_tokens = last_hidden_states[:, 1:1+model.config.num_register_tokens, :]  # Register tokens
-    patch_tokens = last_hidden_states[:, 1+model.config.num_register_tokens:, :]  # Patch tokens
-    
-    # Reshape patch tokens to 2D grid for easier usage
-    patch_features = patch_tokens.reshape(batch_size, num_patches_height, num_patches_width, -1)
-    
-    return cls_token, register_tokens, patch_features
 
