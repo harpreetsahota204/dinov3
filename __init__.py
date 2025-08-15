@@ -73,7 +73,12 @@ def download_model(model_name, model_path, **kwargs):
         raise
 
 
-def load_model(model_name, model_path, **kwargs):
+def load_model(
+        model_name, 
+        model_path, 
+        output_type="cls",
+        **kwargs
+        ):
     """Loads the model.
     
     Args:
@@ -102,46 +107,43 @@ def load_model(model_name, model_path, **kwargs):
     
     # Set default parameters if not provided
     default_params = {
-        "output_type": "patch",  # Default to patch tokens
-        "raw_inputs": True,  # We handle preprocessing ourselves
+        "model_version": model_name,
+        "model_path": model_path,  # Add the model path for loading from disk
+        "output_type": output_type,
+        **kwargs
     }
     
     # Update with provided kwargs
     default_params.update(kwargs)
     
-    # Set up output processor based on output type
-    output_type = default_params["output_type"]
-    
-    # Only support the three fundamental token types
-    internal_output_type = output_type
-    
-    # Process based on the three token types ONLY
-    if internal_output_type == "cls":
+    if output_type == "cls":
         # CLS token - global image representation (position 0)
         default_params["as_feature_extractor"] = True
-        default_params["output_processor_cls"] = DinoV3OutputProcessor
+        default_params["output_processor_cls"] = DINOV3OutputProcessor
         default_params["output_processor_args"] = {"output_type": "cls"}
         
-    elif internal_output_type == "attention_map":
+    elif output_type == "attention_map":
         # Register tokens - memory slots (positions 1 to 1+num_register_tokens)
         default_params["as_feature_extractor"] = True
         default_params["output_processor_cls"] = DINOV3HeatmapOutputProcessor
         default_params["output_processor_args"] = {"output_type": "attention_map"}
         
-    elif internal_output_type == "patch":
+    elif output_type == "patch":
         # Patch tokens - local embeddings for each 16x16 patch (remaining positions)
         default_params["as_feature_extractor"] = True
-        default_params["output_processor_cls"] = DinoV3OutputProcessor
-        default_params["output_processor_args"] = {"output_type": "patch"}
+        default_params["output_processor_cls"] = DINOV3HeatmapOutputProcessor
+        default_params["output_processor_args"] = {
+            "apply_smoothing": kwargs.get("apply_smoothing", True),
+            "smoothing_sigma": kwargs.get("smoothing_sigma", 1.51),
+        }
         
-
     else:
         raise ValueError(f"Unsupported output_type: {output_type}. Use 'cls', 'register', or 'patch' (the three token types).")
 
     
     # Create and return the model
-    config = DinoV3ModelConfig(default_params)
-    return DinoV3Model(config)
+    config = DINOV3ModelConfig(default_params)
+    return DINOV3Model(config)
 
 
 def resolve_input(model_name, ctx):
