@@ -7,7 +7,7 @@
             "base_filename": "dinov3-vits16-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vit7b16-pretrain-lvd1689m",
             "description": "DINOv3 ViT-S/16 model (21M parameters) - Small vision transformer for fast inference",
             "tags": [
                 "embeddings",
@@ -17,7 +17,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -31,7 +31,7 @@
             "base_filename": "dinov3-vits16plus-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vits16plus-pretrain-lvd1689m",
             "description": "DINOv3 ViT-S+/16 model (29M parameters) - Small+ vision transformer with SwiGLU FFN",
             "tags": [
                 "embeddings",
@@ -42,7 +42,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -56,7 +56,7 @@
             "base_filename": "dinov3-vitb16-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m",
             "description": "DINOv3 ViT-B/16 model (86M parameters) - Base vision transformer, balanced performance",
             "tags": [
                 "embeddings",
@@ -67,7 +67,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -81,7 +81,7 @@
             "base_filename": "dinov3-vitl16-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m",
             "description": "DINOv3 ViT-L/16 model (300M parameters) - Large vision transformer for high accuracy",
             "tags": [
                 "embeddings",
@@ -92,7 +92,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -106,7 +106,7 @@
             "base_filename": "dinov3-vith16plus-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vith16plus-pretrain-lvd1689m",
             "description": "DINOv3 ViT-H+/16 model (840M parameters) - Huge+ vision transformer with SwiGLU FFN",
             "tags": [
                 "embeddings",
@@ -118,7 +118,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -132,7 +132,7 @@
             "base_filename": "dinov3-vit7b16-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vit7b16-pretrain-lvd1689m",
             "description": "DINOv3 ViT-7B/16 model (7.16B parameters) - Giant vision transformer for maximum performance",
             "tags": [
                 "embeddings",
@@ -144,7 +144,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": false
                 },
@@ -158,7 +158,7 @@
             "base_filename": "dinov3-convnext-tiny-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-convnext-tiny-pretrain-lvd1689m",
             "description": "DINOv3 ConvNeXt-Tiny model (29M parameters) - Tiny ConvNeXt for fast inference",
             "tags": [
                 "embeddings",
@@ -168,7 +168,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -182,7 +182,7 @@
             "base_filename": "dinov3-convnext-small-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-convnext-small-pretrain-lvd1689m",
             "description": "DINOv3 ConvNeXt-Small model (50M parameters) - Small ConvNeXt for balanced performance",
             "tags": [
                 "embeddings",
@@ -193,7 +193,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -207,7 +207,7 @@
             "base_filename": "dinov3-convnext-base-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-convnext-base-pretrain-lvd1689m",
             "description": "DINOv3 ConvNeXt-Base model (89M parameters) - Base ConvNeXt for good performance",
             "tags": [
                 "embeddings",
@@ -218,7 +218,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -232,7 +232,7 @@
             "base_filename": "dinov3-convnext-large-pretrain-lvd1689m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-convnext-large-pretrain-lvd1689m",
             "description": "DINOv3 ConvNeXt-Large model (198M parameters) - Large ConvNeXt for high accuracy",
             "tags": [
                 "embeddings",
@@ -243,7 +243,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -257,7 +257,7 @@
             "base_filename": "dinov3-vitl16-pretrain-sat493m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vitl16-pretrain-sat493m",
             "description": "DINOv3 ViT-L/16 model (300M parameters) - Large vision transformer trained on satellite data",
             "tags": [
                 "embeddings",
@@ -269,7 +269,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": true
                 },
@@ -283,7 +283,7 @@
             "base_filename": "dinov3-vit7b16-pretrain-sat493m",
             "author": "Meta AI",
             "license": "DINOv3 License",
-            "source": "https://github.com/facebookresearch/dinov3",
+            "source": "https://huggingface.co/facebook/dinov3-vit7b16-pretrain-sat493m",
             "description": "DINOv3 ViT-7B/16 model (7.16B parameters) - Giant vision transformer trained on satellite data",
             "tags": [
                 "embeddings",
@@ -297,7 +297,7 @@
             ],
             "date_added": "2025-08-14",
             "requirements": {
-                "packages": ["torch", "torchvision"],
+                "packages": ["torch", "torchvision", "transformers"],
                 "cpu": {
                     "support": false
                 },
